@@ -50,3 +50,13 @@ QickProtocol is a tool which opens up a protocol template after providing small 
 	* str	: text
 
 
+#### *2. GUI design*
+
+#### 1.1 
+
+When starting up the app (perhaps with a short cut) a window will open where the user will be able to select in a sequence via numbers first the template, customer (optional), project (optional). This will lead to a markdown editor which already opened the according template filled with customer/project information. 
+
+Alternatively to creating a new protocol, the user can also jump to his active todos and change the status as the user contunues his work.
+
+Instead of opening a protocol template as decribed above, the user will be also able to exit the protocol process and enter the settings. Here templates, customers, projects, paths for protocol copies (perhaps PDFs auto saved in shared locations) and furhter options will be confugurable.  
+
