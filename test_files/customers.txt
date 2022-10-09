@@ -1,0 +1,4 @@
+customer_A
+customer_B
+customer_C
+customer_D
