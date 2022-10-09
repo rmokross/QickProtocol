@@ -1,6 +1,13 @@
+/*
 #include </Library/Developer/CommandLineTools/usr/include/c++/v1/iostream>
 #include </Library/Developer/CommandLineTools/usr/include/c++/v1/string>
 #include </Library/Developer/CommandLineTools/usr/include/c++/v1/fstream>
+*/
+#include <iostream>
+#include <string>
+#include <fstream>
+
+
 using namespace std;
 // Classes
 
