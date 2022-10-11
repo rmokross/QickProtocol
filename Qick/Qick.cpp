@@ -197,25 +197,23 @@ public:
             rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
             ShowErr(rc, err, __LINE__, __FILE__);
         }
+        sqlite3_close(db);
     }
     string QuyerCustName(int custID)
     {
         char* err;
         sqlite3* db;
         sqlite3_stmt* stmt;
-        string query, custName;
-        const unsigned char* custNameDB;
+        string query, custNameDB;
         sqlite3_open("protocol_DB.db", &db);
 
         query = "SELECT name FROM customer WHERE customerID = " + to_string(custID) + ";";
         sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
-        custNameDB = sqlite3_column_text(stmt, 0);
-        //string custName = reinterpret_cast<const unsigned char*>(custNameDB);
-        //for (int i = 0; i < sizeof(custNameDB); i++)
-        //{
-        //    cout << *(custNameDB+i) << endl; //DEBUGGING HERE
-        //}
-        return custName;
+        custNameDB = std::string(reinterpret_cast<const char*>(
+            sqlite3_column_text(stmt, 0)
+            ));
+        sqlite3_close(db);
+        return custNameDB;
     }
     int MaxCustID()
     {
@@ -231,6 +229,7 @@ public:
         sqlite3_prepare_v2(db, query.c_str(), -1, &stmt2, 0);
         maxID = sqlite3_column_int(stmt2, 0);
         cout << to_string(maxID) << endl;
+        sqlite3_close(db);
         return maxID;
     }
     void CreateCust()
@@ -250,6 +249,7 @@ public:
         query = "INSERT INTO customer VALUES(" + to_string(maxID) + " , '" + custName.c_str() + "', 1)";
         rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
         ShowErr(rc, err, __LINE__, __FILE__);
+        sqlite3_close(db);
     }
     void PrintCustNames()
     {
@@ -261,7 +261,6 @@ public:
         sqlite3_open("protocol_DB.db", &db);
 
         const unsigned char* custName;
-        string comp;
         int id;
         sqlite3_prepare_v2(db, "SELECT customerID, name FROM customer WHERE customerID != 0 AND status = 1;", -1, &stmt, 0);
         
@@ -272,6 +271,7 @@ public:
             cout << to_string(id) << " : " << custName << endl;
             
         }
+        sqlite3_close(db);
         /*
         else
         {
@@ -293,6 +293,28 @@ public:
             }
         }
         */
+    }
+
+    void PrintProjNames(int customerID)
+    {
+        sqlite3* db;
+        sqlite3_stmt* stmt;
+        int standardCustID = 9999;
+        string query;
+        string standardCust = "No Customer";
+        sqlite3_open("protocol_DB.db", &db);
+
+        const unsigned char* projName;
+        int id;
+        query = "SELECT projectID, name FROM project WHERE customerID =" + to_string(customerID) + ";";
+
+        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+        while (sqlite3_step(stmt) != SQLITE_DONE)
+        {
+            id = sqlite3_column_int(stmt, 0);
+            projName = sqlite3_column_text(stmt, 1);
+            cout << to_string(id) << " : " << projName << endl;
+        }
     }
 };
 int main()
@@ -316,7 +338,11 @@ int main()
         }
     }
     cout << "Looking at vault: " << vaultDir << endl;
-    //
+
+    string templDir = vaultDir + "/Tempaltes";
+    string protocolDir = vaultDir + "/protocols";
+
+    // Handle user input
 
 
     int customerID;
@@ -343,9 +369,16 @@ int main()
     }
     Customer cu(customerID, custName, 1);
 
-
-
     // continue with PROJECT
+    int projectID;
+    string projName;
+
+    cout << "Choose a project from your customer: " + cu.name << endl;
+    MyDB.PrintProjNames(cu.customerID);
+    cout << "42 : Create a new Customer" << endl;
+    cout << "Enter ID: " << endl;
+    cin >> projectID;
+
 
     return 0;
 }
