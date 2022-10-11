@@ -1,2 +1,4 @@
 ﻿  Qick.cpp
+D:\projekte\QickProtocol\Qick\Qick.cpp(203,15): warning C4101: 'err': unreferenced local variable
+LINK : warning LNK4067: ambiguous entry point; selected 'mainCRTStartup'
   Qick.vcxproj -> D:\projekte\QickProtocol\Qick\x64\Debug\Qick.exe

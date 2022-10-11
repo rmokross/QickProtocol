@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-
+#include <vector>
 #include "sqlite/sqlite3.h"
 using namespace std;
 
@@ -94,54 +94,128 @@ public:
 class Database
 {
 public:
-    int stdCustID;
-    string stdCust;
-    string dbms;
 
-    Database(int a, string b, string c)
+ /*   Database(int a, string b, string c)
     {
         stdCustID = a;
         stdCust = b;
         dbms = c;
-    }
+    }*/
+    Database(){};
 
-    void ShowErr(int rc,char* err)
+    void ShowErr(int rc,char* err, int cur_line, string cur_file)
     {
         // char* err;
 
         if (rc != SQLITE_OK)
         {
-            cout << "Error: " << err << endl;
+            cout << "Error: " << err << "\nLine: " + to_string(cur_line) + "\nFile: " + cur_file << endl;
         }
     }
-
     void StartupDB()
     {
         char* err;
         sqlite3* db;
+        sqlite3_stmt* stmt;
         int rc, standardCustID = 9999;
-        string query;
+        string query = "", line;
         string standardCust = "No Customer";
-
-
-        sqlite3_open("protocol_DB.db", &db); 
-
+        
+        sqlite3_open("protocol_DB.db", &db);
         // create tables
-        rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS customer(customerID INT NOT NULL PRIMARY KEY, name varchar(100) NOT NULL, status BOOL DEFAULT 1);", NULL, NULL, &err);
-        ShowErr(rc, err);
-        rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS project(projectID NOT NULL PRIMARY KEY, customerID INT, name varchar(100) NOT NULL, description varchar(2000), start_date datetime default current_timestamp, end_date datetime, status BOOL DEFAULT 1, protocol_dir varchar(200), FOREIGN KEY (customerID) REFERENCES customer (customerID));", 
-            NULL, NULL, &err); // FOREIGN KEY(trackartist) REFERENCES artist(artistid)
-        ShowErr(rc, err);
-        rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS protocol(protocolID INT NOT NULL PRIMARY KEY, protocol_type varchar(100) NOT NULL, create_dt datetime default current_timestamp, title varchar(100), summary varchar(10000), projectID INT, scratch_pad varchar(15000), FOREIGN KEY (projectID) REFERENCES project (projectID));", NULL, NULL, &err);
-        ShowErr(rc, err);
-        rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS todo(todoID INT NOT NULL PRIMARY KEY, protocolID INT NOT NULL, status BOOL DEFAULT 1, name varchar(100), FOREIGN KEY (protocolID) REFERENCES protocol (protocolID));", NULL, NULL, &err);
-        ShowErr(rc, err);
+        rc = sqlite3_exec( // customer table
+            db, 
+            "CREATE TABLE IF NOT EXISTS "
+            "customer("
+            "customerID INT NOT NULL PRIMARY KEY, "
+            "name varchar(100) NOT NULL, "
+            "status BOOL DEFAULT 1); ",
+            NULL, 
+            NULL, 
+            &err
+        );
+        ShowErr(rc, err, __LINE__, __FILE__);
 
-        // customer for projects not linked to a real customer
-        query = "INSERT INTO customer VALUES(" + to_string(standardCustID) + ", '" + standardCust + "', 1);";
-        rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
-        ShowErr(rc, err);
+        rc = sqlite3_exec( // project table
+            db, 
+            "CREATE TABLE IF NOT EXISTS "
+            "project("
+            "projectID NOT NULL PRIMARY KEY, "
+            "customerID INT, "
+            "name varchar(100) NOT NULL, "
+            "description varchar(2000), "
+            "start_date datetime default current_timestamp, "
+            "end_date datetime, "
+            "status BOOL DEFAULT 1, "
+            "protocol_dir varchar(200), "
+            "FOREIGN KEY (customerID) REFERENCES customer (customerID));", 
+            NULL, 
+            NULL, 
+            &err
+        ); // FOREIGN KEY(trackartist) REFERENCES artist(artistid)
+        ShowErr(rc, err, __LINE__, __FILE__);
 
+        rc = sqlite3_exec( // protocol table
+            db, 
+            "CREATE TABLE IF NOT EXISTS "
+            "protocol("
+            "protocolID INT NOT NULL PRIMARY KEY, "
+            "protocol_type varchar(100) NOT NULL, "
+            "create_dt datetime default current_timestamp, "
+            "title varchar(100), "
+            "summary varchar(10000), "
+            "projectID INT, "
+            "scratch_pad varchar(15000), "
+            "FOREIGN KEY (projectID) REFERENCES project (projectID));", 
+            NULL, 
+            NULL, 
+            &err
+        );
+        ShowErr(rc, err, __LINE__, __FILE__);
+        rc = sqlite3_exec( // todo table
+            db, 
+            "CREATE TABLE IF NOT EXISTS "
+            "todo("
+            "todoID INT NOT NULL PRIMARY KEY, "
+            "protocolID INT NOT NULL, "
+            "status BOOL DEFAULT 1, "
+            "name varchar(100), "
+            "FOREIGN KEY(protocolID) REFERENCES protocol(protocolID)); ", 
+            NULL, 
+            NULL, 
+            &err
+        );
+        ShowErr(rc, err, __LINE__, __FILE__);
+        
+        // check if standardCust already exists
+        query = "SELECT count(name) FROM customer WHERE customerID = " + to_string(standardCustID) + "GROUP BY customerID;";
+        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+        if (sizeof(stmt) == 0)
+        {
+            // customer for projects not linked to a real customer
+            query = "INSERT IF NOT EXISTS INTO customer VALUES(" + to_string(standardCustID) + ", '" + standardCust + "', 1);";
+            rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
+            ShowErr(rc, err, __LINE__, __FILE__);
+        }
+    }
+    string QuyerCustName(int custID)
+    {
+        char* err;
+        sqlite3* db;
+        sqlite3_stmt* stmt;
+        string query, custName;
+        const unsigned char* custNameDB;
+        sqlite3_open("protocol_DB.db", &db);
+
+        query = "SELECT name FROM customer WHERE customerID = " + to_string(custID) + ";";
+        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+        custNameDB = sqlite3_column_text(stmt, 0);
+        //string custName = reinterpret_cast<const unsigned char*>(custNameDB);
+        //for (int i = 0; i < sizeof(custNameDB); i++)
+        //{
+        //    cout << *(custNameDB+i) << endl; //DEBUGGING HERE
+        //}
+        return custName;
     }
     int MaxCustID()
     {
@@ -151,11 +225,12 @@ public:
         sqlite3_open("protocol_DB.db", &db);
         // returns the customer with the highest ID
 
-        query = "SELECT max(customerID) FROM customer where customerID != " + to_string(standardCustID) + ";";
+        query = "SELECT max(customerID) FROM customer where customerID != " + to_string(standardCustID) + " GROUP BY name;";
         int maxID;
         sqlite3_stmt* stmt2;
         sqlite3_prepare_v2(db, query.c_str(), -1, &stmt2, 0);
         maxID = sqlite3_column_int(stmt2, 0);
+        cout << to_string(maxID) << endl;
         return maxID;
     }
     void CreateCust()
@@ -172,9 +247,9 @@ public:
         int maxID = MaxCustID() + 1;
         cout << "Please enter customer name: " << endl;
         cin >> custName;
-        query = "INSERT INTO customer VALUIES(" + to_string(maxID) + " , " + custName.c_str() + ")";
+        query = "INSERT INTO customer VALUES(" + to_string(maxID) + " , '" + custName.c_str() + "', 1)";
         rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
-        ShowErr(rc, err);
+        ShowErr(rc, err, __LINE__, __FILE__);
     }
     void PrintCustNames()
     {
@@ -222,24 +297,55 @@ public:
 };
 int main()
 {
+    // read configurations
+
+    ifstream setupConfig("setup.config");
+    string varName, varVal, line, delimiter = "=";
+    vector<string> params;
+    while (getline(setupConfig, line))
+    {
+        params.push_back(line);
+    }
+
+    string vaultDir;
+    for (string param : params)
+    {
+        if (param.substr(0, param.find(delimiter)) == "vault_dir") // think of something nicer here
+        {
+            vaultDir = param.erase(0, param.find(delimiter) + delimiter.length());
+        }
+    }
+    cout << "Looking at vault: " << vaultDir << endl;
+    //
+
+
     int customerID;
+    string custName;
 
     Database MyDB;
     MyDB.StartupDB();
     MyDB.PrintCustNames();
     cout << "42 : Create a new Customer" << endl;
+    cout << "Enter ID: " << endl;
     cin >> customerID;
     
     // create new customer
     if (customerID == 42)
     {
         MyDB.CreateCust();
+        customerID = MyDB.MaxCustID();
+        custName = MyDB.QuyerCustName(customerID);
     }
     else // query data for customerID
     {
         // call method query customer 
+        custName = MyDB.QuyerCustName(customerID);
     }
+    Customer cu(customerID, custName, 1);
 
+
+
+    // continue with PROJECT
 
     return 0;
 }
