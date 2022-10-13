@@ -34,7 +34,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="setup.config">
+    <None Include="setup.txt">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

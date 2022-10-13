@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <filesystem>
 #include "sqlite/sqlite3.h"
 using namespace std;
 
@@ -28,7 +29,7 @@ class Project
 {
 public:
     int projectID;
-    int customerID;
+    string customerName;
     string name;
     string description;
     int start_date;
@@ -37,10 +38,10 @@ public:
     bool status;
     string protocol_dir;
 
-    Project(int a, int b, string c, string d, int g, int h, int i, bool j, string k)
+    Project(int a, string b, string c, string d, int g, int h, int i, bool j, string k)
     {
         projectID = a;
-        customerID = b;
+        customerName = b;
         name = c;
         description = d;
         start_date = g;
@@ -48,6 +49,12 @@ public:
         end_date = i;
         status = j;
         protocol_dir = k;
+    }
+    Project(int a, string b, string c)
+    {
+        projectID = a;
+        customerName = b;
+        name = c;
     }
 };
 
@@ -117,7 +124,7 @@ public:
         char* err;
         sqlite3* db;
         sqlite3_stmt* stmt;
-        int rc, standardCustID = 9999;
+        int rc;
         string query = "", line;
         string standardCust = "No Customer";
         
@@ -127,9 +134,8 @@ public:
             db, 
             "CREATE TABLE IF NOT EXISTS "
             "customer("
-            "customerID INT NOT NULL PRIMARY KEY, "
-            "name varchar(100) NOT NULL, "
-            "status BOOL DEFAULT 1); ",
+            "cust_name varchar(100) PRIMARY KEY, "
+            "status BOOL DEFAULT 1);",
             NULL, 
             NULL, 
             &err
@@ -140,15 +146,14 @@ public:
             db, 
             "CREATE TABLE IF NOT EXISTS "
             "project("
-            "projectID NOT NULL PRIMARY KEY, "
-            "customerID INT, "
-            "name varchar(100) NOT NULL, "
+            "cust_name varchar(100) NOT NULL, "
+            "proj_name varchar(100) PRIMARY KEY, "
             "description varchar(2000), "
             "start_date datetime default current_timestamp, "
             "end_date datetime, "
             "status BOOL DEFAULT 1, "
             "protocol_dir varchar(200), "
-            "FOREIGN KEY (customerID) REFERENCES customer (customerID));", 
+            "FOREIGN KEY (cust_name) REFERENCES customer (cust_name));", 
             NULL, 
             NULL, 
             &err
@@ -159,14 +164,13 @@ public:
             db, 
             "CREATE TABLE IF NOT EXISTS "
             "protocol("
-            "protocolID INT NOT NULL PRIMARY KEY, "
             "protocol_type varchar(100) NOT NULL, "
             "create_dt datetime default current_timestamp, "
-            "title varchar(100), "
+            "title varchar(100) PRIMARY KEY, "
             "summary varchar(10000), "
-            "projectID INT, "
+            "proj_name varchar(100) NOT NULL, "
             "scratch_pad varchar(15000), "
-            "FOREIGN KEY (projectID) REFERENCES project (projectID));", 
+            "FOREIGN KEY (proj_name) REFERENCES project (proj_name));", 
             NULL, 
             NULL, 
             &err
@@ -176,11 +180,10 @@ public:
             db, 
             "CREATE TABLE IF NOT EXISTS "
             "todo("
-            "todoID INT NOT NULL PRIMARY KEY, "
-            "protocolID INT NOT NULL, "
+            "title varchar(100) NOT NULL, "
             "status BOOL DEFAULT 1, "
-            "name varchar(100), "
-            "FOREIGN KEY(protocolID) REFERENCES protocol(protocolID)); ", 
+            "todo_name varchar(100), "
+            "FOREIGN KEY(title) REFERENCES protocol(title)); ", 
             NULL, 
             NULL, 
             &err
@@ -188,68 +191,155 @@ public:
         ShowErr(rc, err, __LINE__, __FILE__);
         
         // check if standardCust already exists
-        query = "SELECT count(name) FROM customer WHERE customerID = " + to_string(standardCustID) + "GROUP BY customerID;";
+        query = "SELECT count(cust_name) FROM customer WHERE cust_name = " + standardCust + "GROUP BY cust_name;";
         sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
         if (sizeof(stmt) == 0)
         {
             // customer for projects not linked to a real customer
-            query = "INSERT IF NOT EXISTS INTO customer VALUES(" + to_string(standardCustID) + ", '" + standardCust + "', 1);";
+            query = "INSERT IF NOT EXISTS INTO customer (cust_name, status) VALUES('" + standardCust + "', 1);";
             rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
             ShowErr(rc, err, __LINE__, __FILE__);
         }
         sqlite3_close(db);
     }
-    string QuyerCustName(int custID)
+    string QueryCustName(int custID)
     {
-        char* err;
         sqlite3* db;
         sqlite3_stmt* stmt;
-        string query, custNameDB;
+        string query, cust;
+        const unsigned char* custNameDB;
         sqlite3_open("protocol_DB.db", &db);
-
-        query = "SELECT name FROM customer WHERE customerID = " + to_string(custID) + ";";
+        
+        query = "SELECT cust_name FROM customer WHERE rowid = " + to_string(custID) + ";";
+        
         sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
-        custNameDB = std::string(reinterpret_cast<const char*>(
-            sqlite3_column_text(stmt, 0)
-            ));
-        sqlite3_close(db);
-        return custNameDB;
+
+        while (sqlite3_step(stmt) != SQLITE_DONE)
+        {
+            custNameDB = sqlite3_column_text(stmt, 0);
+
+            for (int i = 0; i < sizeof(custNameDB); i++)
+            {
+                if (custNameDB[i] == '\0')
+                {
+                    break;
+                }
+                cust += custNameDB[i];
+                // cout << s << endl;
+            }
+            
+        }
+        return cust;
     }
-    int MaxCustID()
+
+    string QueryProjName(int projID)
     {
         sqlite3* db;
-        int standardCustID = 9999;
-        string query;
+        sqlite3_stmt* stmt;
+        string query, projName;
+        const unsigned char* projNameDB;
         sqlite3_open("protocol_DB.db", &db);
-        // returns the customer with the highest ID
 
-        query = "SELECT max(customerID) FROM customer where customerID != " + to_string(standardCustID) + " GROUP BY name;";
-        int maxID;
-        sqlite3_stmt* stmt2;
-        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt2, 0);
-        maxID = sqlite3_column_int(stmt2, 0);
-        cout << to_string(maxID) << endl;
-        sqlite3_close(db);
-        return maxID;
+        query = "SELECT proj_name FROM project WHERE rowid = " + to_string(projID) + ";";
+
+        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+
+        while (sqlite3_step(stmt) != SQLITE_DONE)
+        {
+            projNameDB = sqlite3_column_text(stmt, 0);
+
+            for (int i = 0; i < sizeof(projNameDB); i++)
+            {
+                if (projNameDB[i] == '\0')
+                {
+                    break;
+                }
+                projName += projNameDB[i];
+                // cout << s << endl;
+            }
+
+        }
+        return projName;
     }
-    void CreateCust()
+
+    int QueryProjID(string projName)
+    {
+        sqlite3* db;
+        sqlite3_stmt* stmt;
+        string query;
+        int projID;
+        sqlite3_open("protocol_DB.db", &db);
+
+        query = "SELECT rowid FROM project WHERE proj_name = '" + projName + "';";
+        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+
+        projID = sqlite3_column_int(stmt, 0);
+
+        return projID;
+    }
+
+    int QueryCustID(string custName)
+    {
+        sqlite3* db;
+        sqlite3_stmt* stmt;
+        string query;
+        int custID;
+        sqlite3_open("protocol_DB.db", &db);
+
+        query = "SELECT rowid FROM customer WHERE cust_name = '" + custName + "';";
+        sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+
+        custID = sqlite3_column_int(stmt, 0);
+
+        return custID;
+    }
+
+    string CreateCust()
     {
         char* err;
         sqlite3* db;
         int rc, standardCustID = 9999;
-        string query;
+        string query, dbAttr, vals;
         string standardCust = "No Customer";
         sqlite3_open("protocol_DB.db", &db);
         // creates a new customer with the next highest ID
 
         string custName;
-        int maxID = MaxCustID() + 1;
         cout << "Please enter customer name: " << endl;
         cin >> custName;
-        query = "INSERT INTO customer VALUES(" + to_string(maxID) + " , '" + custName.c_str() + "', 1)";
+
+        dbAttr = "(cust_name)";
+        vals = "('" + custName + "');";
+        query = "INSERT INTO customer "+ dbAttr +" VALUES"+ vals;
         rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
         ShowErr(rc, err, __LINE__, __FILE__);
         sqlite3_close(db);
+
+        return custName;
+    }
+    string CreateProj(string custName, string projPath)
+    {
+        char* err;
+        sqlite3* db;
+        int rc, standardCustID = 9999;
+        string query, projName, dbAttr, vals;
+        string standardCust = "No Customer";
+        sqlite3_open("protocol_DB.db", &db);
+
+        
+        cout << "Please enter project name: " << endl;
+        cin >> projName;
+
+
+        dbAttr = "(proj_name, cust_name, protocol_dir)"; // description and other attr not set
+        vals = "('" +projName+"' ,'"+ custName+ "','" + projPath + "/" + custName + "/" + projName + "');";
+        query = "INSERT INTO project" + dbAttr + " VALUES" + vals; 
+        cout << query << endl;
+        rc = sqlite3_exec(db, query.c_str(), NULL, NULL, &err);
+        ShowErr(rc, err, __LINE__, __FILE__);
+        sqlite3_close(db);
+
+        return projName;
     }
     void PrintCustNames()
     {
@@ -259,10 +349,10 @@ public:
         string query;
         string standardCust = "No Customer";
         sqlite3_open("protocol_DB.db", &db);
-
+        
         const unsigned char* custName;
         int id;
-        sqlite3_prepare_v2(db, "SELECT customerID, name FROM customer WHERE customerID != 0 AND status = 1;", -1, &stmt, 0);
+        sqlite3_prepare_v2(db, "SELECT rowid, cust_name FROM customer WHERE status = 1;", -1, &stmt, 0);
         
         while (sqlite3_step(stmt) != SQLITE_DONE)
         {
@@ -272,30 +362,9 @@ public:
             
         }
         sqlite3_close(db);
-        /*
-        else
-        {
-            char answere;
-            cout << "No custoimers in Database. Do you want to create a Customer? (Y/N)" << endl;
-            cin >> answere;
-            while (true)
-            {
-                if (answere == 'Y' || answere == 'y')
-                {
-                    string customer;
-                    customer = CreateCust();
-                    return customer;
-                }
-                else if (answere == 'N' || answere == 'n')
-                {
-                    cout << "Do you want to"
-                }
-            }
-        }
-        */
     }
 
-    void PrintProjNames(int customerID)
+    void PrintProjNames(string cust_name)
     {
         sqlite3* db;
         sqlite3_stmt* stmt;
@@ -306,7 +375,7 @@ public:
 
         const unsigned char* projName;
         int id;
-        query = "SELECT projectID, name FROM project WHERE customerID =" + to_string(customerID) + ";";
+        query = "SELECT rowid, proj_name FROM project WHERE cust_name ='"+ cust_name +"' ;";
 
         sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
         while (sqlite3_step(stmt) != SQLITE_DONE)
@@ -346,7 +415,8 @@ int main()
 
 
     int customerID;
-    string custName;
+    string customerName;
+
 
     Database MyDB;
     MyDB.StartupDB();
@@ -354,31 +424,69 @@ int main()
     cout << "42 : Create a new Customer" << endl;
     cout << "Enter ID: " << endl;
     cin >> customerID;
-    
     // create new customer
     if (customerID == 42)
     {
-        MyDB.CreateCust();
-        customerID = MyDB.MaxCustID();
-        custName = MyDB.QuyerCustName(customerID);
+        customerName = MyDB.CreateCust();
+        // customerID = MyDB.MaxCustID();
+        customerID = MyDB.QueryCustID(customerName);
     }
     else // query data for customerID
     {
         // call method query customer 
-        custName = MyDB.QuyerCustName(customerID);
+        customerName = MyDB.QueryCustName(customerID);
     }
-    Customer cu(customerID, custName, 1);
+
+    Customer cu(customerID, customerName, 1);
 
     // continue with PROJECT
     int projectID;
-    string projName;
+    string projName, projectPath;
 
     cout << "Choose a project from your customer: " + cu.name << endl;
-    MyDB.PrintProjNames(cu.customerID);
-    cout << "42 : Create a new Customer" << endl;
+    MyDB.PrintProjNames(cu.name);
+    cout << "42 : Create a new project" << endl;
     cout << "Enter ID: " << endl;
     cin >> projectID;
+    if (projectID == 42)
+    {
+        projName = MyDB.CreateProj(cu.name, protocolDir);
+        projectID = MyDB.QueryProjID(projName);
 
+    }
+    else
+    {
+        projName = MyDB.QueryProjName(projectID);
+    }
+
+    Project pr(projectID, cu.name, projName);
+
+    for (const auto& entry : std::filesystem::directory_iterator(templDir))
+    {
+        cout << entry.path() << endl;
+    }
+    string templateType;
+    cin >> templateType;
+    
+
+    //sqlite3* db;
+    //sqlite3_stmt* stmt;
+    //int standardCustID = 9999;
+    //string query;
+    //string standardCust = "No Customer";
+    //sqlite3_open("protocol_DB.db", &db);
+
+    //query = "SELECT * FROM customer;";
+
+
+    //sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+
+    //while (sqlite3_step(stmt) != SQLITE_DONE)
+    //{
+    //    const unsigned char* a;
+    //    a = sqlite3_column_text(stmt, 1);
+    //    cout << a << endl;
+    //}
 
     return 0;
 }
